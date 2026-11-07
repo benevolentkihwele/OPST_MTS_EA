@@ -1,0 +1,16 @@
+
+# MetaTrader compiled files
+*.ex5
+*.ex4
+
+# Logs and temporary files
+*.log
+*.tmp
+
+# IDE files
+.vscode/
+.idea/
+
+# Operating system
+.DS_Store
+Thumbs.db
