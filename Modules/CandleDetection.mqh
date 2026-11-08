@@ -2,19 +2,17 @@
 #ifndef CANDLE_DETECTION_MQH
 #define CANDLE_DETECTION_MQH
 
-//+------------------------------------------------------------------+
-//| Candle Detection Module                                          |
-//| OPST + MTS*1 Expert Advisor                                      |
-//+------------------------------------------------------------------+
+//==============================================================
+// OPST MTS EA - Candle Detection Module
+//==============================================================
 
 enum ENUM_CANDLE_DIRECTION
 {
    CANDLE_BEARISH = -1,
-   CANDLE_DOJI   = 0,
+   CANDLE_DOJI    = 0,
    CANDLE_BULLISH = 1
 };
 
-// Candle information structure
 struct CandleData
 {
    datetime time;
@@ -33,9 +31,10 @@ struct CandleData
    ENUM_CANDLE_DIRECTION direction;
 };
 
-//+------------------------------------------------------------------+
-//| Load candle data                                                 |
-//+------------------------------------------------------------------+
+//==============================================================
+// Load candle data
+//==============================================================
+
 bool GetCandleData(
    string symbol,
    ENUM_TIMEFRAMES timeframe,
@@ -70,52 +69,129 @@ bool GetCandleData(
 
    if(candle.close > candle.open)
       candle.direction = CANDLE_BULLISH;
-
    else if(candle.close < candle.open)
       candle.direction = CANDLE_BEARISH;
-
    else
       candle.direction = CANDLE_DOJI;
 
-   return true;
+   return IsValidCandle(candle);
 }
 
-//+------------------------------------------------------------------+
-//| Check bullish candle                                             |
-//+------------------------------------------------------------------+
-bool IsBullishCandle(CandleData &candle)
-{
-   return candle.direction == CANDLE_BULLISH;
-}
+//==============================================================
+// Validate candle
+//==============================================================
 
-//+------------------------------------------------------------------+
-//| Check bearish candle                                             |
-//+------------------------------------------------------------------+
-bool IsBearishCandle(CandleData &candle)
-{
-   return candle.direction == CANDLE_BEARISH;
-}
-
-//+------------------------------------------------------------------+
-//| Calculate R candle body midpoint                                 |
-//+------------------------------------------------------------------+
-double GetRBodyMidpoint(CandleData &candle)
-{
-   return (candle.open + candle.close) / 2.0;
-}
-
-//+------------------------------------------------------------------+
-//| Validate candle data                                             |
-//+------------------------------------------------------------------+
 bool IsValidCandle(CandleData &candle)
 {
    if(candle.high <= candle.low)
       return false;
 
-   if(candle.body_size < 0)
+   if(candle.body_size < 0.0)
       return false;
 
-   if(candle.upper_wick < 0 || candle.lower_wick < 0)
+   if(candle.upper_wick < 0.0)
+      return false;
+
+   if(candle.lower_wick < 0.0)
+      return false;
+
+   return true;
+}
+
+//==============================================================
+// Candle direction checks
+//==============================================================
+
+bool IsBullishCandle(CandleData &candle)
+{
+   return candle.close > candle.open;
+}
+
+bool IsBearishCandle(CandleData &candle)
+{
+   return candle.close < candle.open;
+}
+
+bool IsDojiCandle(CandleData &candle)
+{
+   return candle.close == candle.open;
+}
+
+//==============================================================
+// Candle measurements
+//==============================================================
+
+double GetCandleBodyMidpoint(CandleData &candle)
+{
+   return (candle.open + candle.close) / 2.0;
+}
+
+double GetLowerWick(CandleData &candle)
+{
+   return candle.lower_wick;
+}
+
+double GetUpperWick(CandleData &candle)
+{
+   return candle.upper_wick;
+}
+
+double GetCandleRange(CandleData &candle)
+{
+   return candle.high - candle.low;
+}
+
+//==============================================================
+// Check whether candle reaches R body midpoint
+//==============================================================
+
+bool TouchesBodyMidpoint(
+   CandleData &r,
+   CandleData &opst,
+   bool bullishSetup
+)
+{
+   double midpoint = GetCandleBodyMidpoint(r);
+
+   if(bullishSetup)
+      return opst.low <= midpoint;
+
+   return opst.high >= midpoint;
+}
+
+//==============================================================
+// Compare directional wicks
+//==============================================================
+
+bool ValidateDirectionalWick(
+   CandleData &r,
+   CandleData &opst,
+   bool bullishSetup
+)
+{
+   if(bullishSetup)
+      return opst.lower_wick > r.lower_wick;
+
+   return opst.upper_wick > r.upper_wick;
+}
+
+//==============================================================
+// Check completed candle
+//==============================================================
+
+bool IsCompletedCandle(
+   string symbol,
+   ENUM_TIMEFRAMES timeframe,
+   int shift
+)
+{
+   if(shift < 1)
+      return false;
+
+   datetime candleTime =
+      iTime(symbol, timeframe, shift);
+
+   if(candleTime == 0)
       return false;
 
    return true;

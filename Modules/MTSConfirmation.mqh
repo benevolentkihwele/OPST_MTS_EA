@@ -4,9 +4,9 @@
 
 #include "OPSTValidation.mqh"
 
-//+------------------------------------------------------------------+
-//| MTS*1 State                                                      |
-//+------------------------------------------------------------------+
+//==============================================================
+// MTS states
+//==============================================================
 
 enum ENUM_MTS_STATE
 {
@@ -17,17 +17,19 @@ enum ENUM_MTS_STATE
    MTS_CONSUMED
 };
 
-//+------------------------------------------------------------------+
-//| MTS Setup State                                                  |
-//+------------------------------------------------------------------+
+//==============================================================
+// MTS tracking structure
+//==============================================================
 
 struct MTSData
 {
    ENUM_MTS_STATE state;
 
+   ENUM_OPST_STRATEGY strategy;
    ENUM_OPST_DIRECTION direction;
 
    double level;
+   double entry_level;
    double stop_loss;
 
    datetime confirmation_time;
@@ -36,9 +38,9 @@ struct MTSData
    bool trade_executed;
 };
 
-//+------------------------------------------------------------------+
-//| Initialize MTS                                                   |
-//+------------------------------------------------------------------+
+//==============================================================
+// Initialize MTS
+//==============================================================
 
 void InitializeMTS(
    OPSTSetup &setup,
@@ -47,20 +49,22 @@ void InitializeMTS(
 {
    mts.state = MTS_WAITING;
 
+   mts.strategy = setup.strategy;
    mts.direction = setup.direction;
 
    mts.level = setup.mts_level;
+   mts.entry_level = setup.entry_level;
    mts.stop_loss = setup.stop_loss;
 
-   mts.confirmation_time = setup.second_opst.time;
+   mts.confirmation_time = setup.setup_time;
    mts.setup_time = setup.setup_time;
 
    mts.trade_executed = false;
 }
 
-//+------------------------------------------------------------------+
-//| Confirm MTS*1                                                    |
-//+------------------------------------------------------------------+
+//==============================================================
+// Confirm MTS
+//==============================================================
 
 bool ConfirmMTS(
    OPSTSetup &setup,
@@ -70,23 +74,27 @@ bool ConfirmMTS(
    if(!setup.valid)
       return false;
 
-   if(mts.trade_executed)
-      return false;
-
    if(mts.state != MTS_WAITING)
       return false;
 
    bool confirmed = false;
 
-   if(setup.direction == OPST_BUY)
+   if(setup.strategy == STRATEGY_MODULE_1)
    {
-      confirmed =
-         setup.second_opst.close > setup.r_candle.open;
+      if(setup.direction == OPST_BUY)
+         confirmed = setup.opst2.close > setup.r1.open;
+
+      else if(setup.direction == OPST_SELL)
+         confirmed = setup.opst2.close < setup.r1.open;
    }
-   else if(setup.direction == OPST_SELL)
+
+   else if(setup.strategy == STRATEGY_MODULE_2)
    {
-      confirmed =
-         setup.second_opst.close < setup.r_candle.open;
+      if(setup.direction == OPST_BUY)
+         confirmed = setup.opst3.close > setup.mts_level;
+
+      else if(setup.direction == OPST_SELL)
+         confirmed = setup.opst3.close < setup.mts_level;
    }
 
    if(!confirmed)
@@ -97,9 +105,9 @@ bool ConfirmMTS(
    return true;
 }
 
-//+------------------------------------------------------------------+
-//| Invalidate setup before entry                                    |
-//+------------------------------------------------------------------+
+//==============================================================
+// Check setup invalidation before entry
+//==============================================================
 
 bool CheckMTSInvalidation(
    double bid,
@@ -118,6 +126,7 @@ bool CheckMTSInvalidation(
          return true;
       }
    }
+
    else if(mts.direction == OPST_SELL)
    {
       if(ask >= mts.stop_loss)
@@ -130,14 +139,26 @@ bool CheckMTSInvalidation(
    return false;
 }
 
-//+------------------------------------------------------------------+
-//| Mark setup as consumed                                           |
-//+------------------------------------------------------------------+
+//==============================================================
+// Consume setup after successful trade
+//==============================================================
 
 void ConsumeMTS(MTSData &mts)
 {
    mts.trade_executed = true;
    mts.state = MTS_CONSUMED;
+}
+
+//==============================================================
+// Check active setup
+//==============================================================
+
+bool IsMTSActive(MTSData &mts)
+{
+   return (
+      mts.state == MTS_CONFIRMED &&
+      !mts.trade_executed
+   );
 }
 
 #endif
